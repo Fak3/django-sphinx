@@ -322,6 +322,8 @@ class SphinxQuerySet(object):
                 v = list(v)
             elif not (isinstance(v, list) or isinstance(v, tuple)):
                  v = [v,]
+            if k == 'pk': # special case for document_id
+                k = '@id'
             filters.setdefault(k, []).extend(map(to_sphinx, v))
         return self._clone(_filters=filters)
 
@@ -347,6 +349,8 @@ class SphinxQuerySet(object):
                 v = list(v)
             elif not (isinstance(v, list) or isinstance(v, tuple)):
                  v = [v,]
+            if k == 'pk': # special case for document_id
+                k = '@id'
             filters.setdefault(k, []).extend(map(to_sphinx, v))
         return self._clone(_excludes=filters)
 
