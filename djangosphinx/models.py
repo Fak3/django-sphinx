@@ -56,7 +56,10 @@ class SphinxProxy(object):
     def __init__(self, instance, attributes):
         object.__setattr__(self, '__instance__', instance)
         object.__setattr__(self, '_sphinx', attributes)
-
+    
+    def count(self):
+        return self._sphinx['attrs'].get('@count')
+        
     def _get_current_object(self):
         """
         Return the current object.  This is useful if you want the real object
