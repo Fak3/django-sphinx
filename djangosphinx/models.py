@@ -194,7 +194,7 @@ def to_sphinx(value):
     return int(value)
 
 class SphinxQuerySet(object):
-    available_kwargs = ('rankmode', 'mode', 'weights', 'maxmatches', 'passages', 'passages_opts')
+    available_kwargs = ('rankmode', 'mode', 'weights', 'maxmatches', 'passages', 'passages_opts', 'only_sphinx')
     
     def __init__(self, model=None, using=None, **kwargs):
         self._select_related        = False
@@ -223,6 +223,8 @@ class SphinxQuerySet(object):
         self.__metadata             = {}
         
         self.using                  = using
+        
+        self._only_sphinx            = False
         
         options = self._format_options(**kwargs)
         for key, value in options.iteritems():
@@ -574,80 +576,82 @@ class SphinxQuerySet(object):
             # XXX: The passages implementation has a potential gotcha if your id
             # column is not actually your primary key
             words = ' '.join([w['word'] for w in results['words']])
-            
-        if self.model:
-            if results['matches']:
-                queryset = self.get_query_set(self.model)
-                if self._select_related:
-                    queryset = queryset.select_related(*self._select_related_fields, **self._select_related_args)
-                if self._extra:
-                    queryset = queryset.extra(**self._extra)
-
-                # django-sphinx supports the compositepks branch
-                # as well as custom id columns in your sphinx configuration
-                # but all primary key columns still need to be present in the field list
-                pks = getattr(self.model._meta, 'pks', [self.model._meta.pk])
-                if results['matches'][0]['attrs'].get(pks[0].column):
-                    
-                    # XXX: Sometimes attrs is empty and we cannot have custom primary key attributes
-                    for r in results['matches']:
-                        r['id'] = ', '.join([unicode(r['attrs'][p.column]) for p in pks])
-            
-                    # Join our Q objects to get a where clause which
-                    # matches all primary keys, even across multiple columns
-                    q = reduce(operator.or_, [reduce(operator.and_, [Q(**{p.name: r['attrs'][p.column]}) for p in pks]) for r in results['matches']])
-                    queryset = queryset.filter(q)
-                else:
-                    for r in results['matches']:
-                        r['id'] = unicode(r['id'])
-                    queryset = queryset.filter(pk__in=[r['id'] for r in results['matches']])
-                queryset = dict([(', '.join([unicode(getattr(o, p.attname)) for p in pks]), o) for o in queryset])
-
-                if self._passages:
-                    # TODO: clean this up
-                    for r in results['matches']:
-                        if r['id'] in queryset:
-                            r['passages'] = self._get_passages(queryset[r['id']], results['fields'], words)
-                
-                results = [SphinxProxy(queryset[r['id']], r) for r in results['matches'] if r['id'] in queryset]
-            else:
-                results = []
+        if self._only_sphinx:
+            results = results['matches']
         else:
-            "We did a query without a model, lets see if there's a content_type"
-            results['attrs'] = dict(results['attrs'])
-            if 'content_type' in results['attrs']:
-                "Now we have to do one query per content_type"
-                objcache = {}
-                for r in results['matches']:
-                    ct = r['attrs']['content_type']
-                    r['id'] = unicode(r['id'])
-                    objcache.setdefault(ct, {})[r['id']] = None
-                for ct in objcache:
-                    model_class = ContentType.objects.get(pk=ct).model_class()
-                    pks = getattr(model_class._meta, 'pks', [model_class._meta.pk])
-                    
-                    if results['matches'][0]['attrs'].get(pks[0].column):
-                        for r in results['matches']:
-                            if r['attrs']['content_type'] == ct:
-                                val = ', '.join([unicode(r['attrs'][p.column]) for p in pks])
-                                objcache[ct][r['id']] = r['id'] = val
-                    
-                        q = reduce(operator.or_, [reduce(operator.and_, [Q(**{p.name: r['attrs'][p.column]}) for p in pks]) for r in results['matches'] if r['attrs']['content_type'] == ct])
-                        queryset = self.get_query_set(model_class).filter(q)
-                    else:
-                        queryset = self.get_query_set(model_class).filter(pk__in=[r['id'] for r in results['matches'] if r['attrs']['content_type'] == ct])
+            if self.model:
+                if results['matches']:
+                    queryset = self.get_query_set(self.model)
+                    if self._select_related:
+                        queryset = queryset.select_related(*self._select_related_fields, **self._select_related_args)
+                    if self._extra:
+                        queryset = queryset.extra(**self._extra)
 
-                    for o in queryset:
-                        objcache[ct][', '.join([unicode(getattr(o, p.name)) for p in pks])] = o
+                    # django-sphinx supports the compositepks branch
+                    # as well as custom id columns in your sphinx configuration
+                    # but all primary key columns still need to be present in the field list
+                    pks = getattr(self.model._meta, 'pks', [self.model._meta.pk])
+                    if results['matches'][0]['attrs'].get(pks[0].column):
+                    
+                        # XXX: Sometimes attrs is empty and we cannot have custom primary key attributes
+                        for r in results['matches']:
+                            r['id'] = ', '.join([unicode(r['attrs'][p.column]) for p in pks])
+            
+                        # Join our Q objects to get a where clause which
+                        # matches all primary keys, even across multiple columns
+                        q = reduce(operator.or_, [reduce(operator.and_, [Q(**{p.name: r['attrs'][p.column]}) for p in pks]) for r in results['matches']])
+                        queryset = queryset.filter(q)
+                    else:
+                        for r in results['matches']:
+                            r['id'] = unicode(r['id'])
+                        queryset = queryset.filter(pk__in=[r['id'] for r in results['matches']])
+                    queryset = dict([(', '.join([unicode(getattr(o, p.attname)) for p in pks]), o) for o in queryset])
+
+                    if self._passages:
+                        # TODO: clean this up
+                        for r in results['matches']:
+                            if r['id'] in queryset:
+                                r['passages'] = self._get_passages(queryset[r['id']], results['fields'], words)
                 
-                if self._passages:
+                    results = [SphinxProxy(queryset[r['id']], r) for r in results['matches'] if r['id'] in queryset]
+                else:
+                    results = []
+            else:
+                "We did a query without a model, lets see if there's a content_type"
+                results['attrs'] = dict(results['attrs'])
+                if 'content_type' in results['attrs']:
+                    "Now we have to do one query per content_type"
+                    objcache = {}
                     for r in results['matches']:
                         ct = r['attrs']['content_type']
-                        if r['id'] in objcache[ct]:
-                            r['passages'] = self._get_passages(objcache[ct][r['id']], results['fields'], words)
-                results = [SphinxProxy(objcache[r['attrs']['content_type']][r['id']], r) for r in results['matches'] if r['id'] in objcache[r['attrs']['content_type']]]
-            else:
-                results = results['matches']
+                        r['id'] = unicode(r['id'])
+                        objcache.setdefault(ct, {})[r['id']] = None
+                    for ct in objcache:
+                        model_class = ContentType.objects.get(pk=ct).model_class()
+                        pks = getattr(model_class._meta, 'pks', [model_class._meta.pk])
+                    
+                        if results['matches'][0]['attrs'].get(pks[0].column):
+                            for r in results['matches']:
+                                if r['attrs']['content_type'] == ct:
+                                    val = ', '.join([unicode(r['attrs'][p.column]) for p in pks])
+                                    objcache[ct][r['id']] = r['id'] = val
+                    
+                            q = reduce(operator.or_, [reduce(operator.and_, [Q(**{p.name: r['attrs'][p.column]}) for p in pks]) for r in results['matches'] if r['attrs']['content_type'] == ct])
+                            queryset = self.get_query_set(model_class).filter(q)
+                        else:
+                            queryset = self.get_query_set(model_class).filter(pk__in=[r['id'] for r in results['matches'] if r['attrs']['content_type'] == ct])
+
+                        for o in queryset:
+                            objcache[ct][', '.join([unicode(getattr(o, p.name)) for p in pks])] = o
+                
+                    if self._passages:
+                        for r in results['matches']:
+                            ct = r['attrs']['content_type']
+                            if r['id'] in objcache[ct]:
+                                r['passages'] = self._get_passages(objcache[ct][r['id']], results['fields'], words)
+                    results = [SphinxProxy(objcache[r['attrs']['content_type']][r['id']], r) for r in results['matches'] if r['id'] in objcache[r['attrs']['content_type']]]
+                else:
+                    results = results['matches']
         self._result_cache = results
         return results
 
