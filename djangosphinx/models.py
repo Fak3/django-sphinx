@@ -209,6 +209,7 @@ class SphinxQuerySet(object):
         self._limit                 = 20
 
         self._groupby               = None
+        self._groupdistinct         = None
         self._sort                  = None
         self._weights               = [1, 100]
 
@@ -299,6 +300,9 @@ class SphinxQuerySet(object):
 
     def group_by(self, attribute, func, groupsort='@group desc'):
         return self._clone(_groupby=attribute, _groupfunc=func, _groupsort=groupsort)
+
+    def group_distinct(self, attribute):
+        return self._clone(_groupdistinct=attribute)
 
     def rank_none(self):
         warnings.warn('`rank_none()` is deprecated. Use `set_options(rankmode=None)` instead.', DeprecationWarning)
@@ -513,6 +517,11 @@ class SphinxQuerySet(object):
         if self._groupby:
             params.append('groupby=%s' % (self._groupby,))
             client.SetGroupBy(self._groupby, self._groupfunc, self._groupsort)
+
+        if self._groupdistinct:
+            assert self._groupby, "Distinct works only together with group_by function."
+            params.append('groupdistinct=%s' % (self._groupdistinct,))
+            client.SetGroupDistinct(self._groupdistinct)
 
         if self._anchor:
             params.append('geoanchor=%s' % (self._anchor,))
