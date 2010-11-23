@@ -225,7 +225,9 @@ class SphinxQuerySet(object):
         
         self.using                  = using
         
-        self._only_sphinx            = False
+        self._only_sphinx           = False
+        self._only                  = False
+        self._only_fields           = []
         
         options = self._format_options(**kwargs)
         for key, value in options.iteritems():
@@ -400,7 +402,16 @@ class SphinxQuerySet(object):
         extra = self._extra.copy()
         extra.update(kwargs)
         return self._clone(_extra=extra)
-
+    
+    def only(self, *args):
+        _args = self._only_fields[:]
+        _args.extend(args)
+        
+        return self._clone(
+            _only=True,
+            _only_fields=_args,
+        )
+        
     def count(self):
         return min(self._sphinx.get('total_found', 0), self._maxmatches)
 
@@ -569,6 +580,8 @@ class SphinxQuerySet(object):
             queryset = queryset.select_related(*self._select_related_fields, **self._select_related_args)
         if self._extra:
             queryset = queryset.extra(**self._extra)
+        if self._only:
+            queryset = queryset.only(*self._only_fields)
         return queryset.get(**kwargs)
 
     def _get_results(self):
@@ -595,7 +608,8 @@ class SphinxQuerySet(object):
                         queryset = queryset.select_related(*self._select_related_fields, **self._select_related_args)
                     if self._extra:
                         queryset = queryset.extra(**self._extra)
-
+                    if self._only:
+                        queryset = queryset.only(*self._only_fields)
                     # django-sphinx supports the compositepks branch
                     # as well as custom id columns in your sphinx configuration
                     # but all primary key columns still need to be present in the field list
@@ -820,6 +834,8 @@ class SphinxRelation(SphinxSearch):
                                        **self._select_related_args)
             if self._extra:
                 qs = qs.extra(**self._extra)
+            if self._only:
+                qs = qs.only(*self._only_fields)
             queryset = dict([(o.id, o) for o in qs])
             results = [ SphinxRelationProxy(queryset[k['attrs']['@groupby']], k) \
                         for k in results['matches'] \
