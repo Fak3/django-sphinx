@@ -11,10 +11,12 @@ import djangosphinx.apis.current as sphinxapi
 __all__ = ('generate_config_for_model', 'generate_config_for_models')
 
 def _get_database_engine():
-    if settings.DATABASE_ENGINE: # if django < 1.2
+    if hasattr(settings, 'DATABASES'): # if django >= 1.2
+        engine = settings.DATABASES['default']['ENGINE']
+    elif hasattr(settings, 'DATABASE_ENGINE'): # if django < 1.2
         engine = settings.DATABASE_ENGINE
-    elif settings.DATABASES: # if django >= 1.2
-        engine = settings.DATABASES['default']['ENGINE'] 
+    else:
+        engine = ''
         
     if engine == 'mysql':
         return settings.DATABASE_ENGINE
@@ -53,7 +55,7 @@ def _is_sourcable_field(field):
     return False
 
 # No trailing slashes on paths
-if settings.DATABASES:
+if hasattr(settings, 'DATABASES'): # if django >= 1.2
     DEFAULT_SPHINX_PARAMS = {
         'database_engine': _get_database_engine(),
         'database_host': settings.DATABASES['default']['HOST'],
