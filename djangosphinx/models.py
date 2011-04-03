@@ -203,6 +203,8 @@ class SphinxQuerySet(object):
         self._select_related_fields = []
         self._filters               = {}
         self._excludes              = {}
+        self._db_filters           = {}
+        self._db_excludes          = {}
         self._extra                 = {}
         self._query                 = ''
         self.__metadata             = None
@@ -412,7 +414,17 @@ class SphinxQuerySet(object):
             _only=True,
             _only_fields=_args,
         )
-        
+
+    def db_filter(self, **kwargs):
+        db_filters = self._db_filters.copy()
+        db_filters.update(kwargs)
+        return self._clone(_db_filters=db_filters)
+
+    def db_exclude(self, **kwargs):
+        db_excludes = self._db_excludes.copy()
+        db_excludes.update(kwargs)
+        return self._clone(_db_excludes=db_excludes)
+
     def count(self):
         return min(self._sphinx.get('total_found', 0), self._maxmatches)
 
@@ -583,6 +595,10 @@ class SphinxQuerySet(object):
             queryset = queryset.extra(**self._extra)
         if self._only:
             queryset = queryset.only(*self._only_fields)
+        if self._db_filters:
+            queryset = queryset.filter(**self._db_filters)
+        if self._db_excludes:
+            queryset = queryset.exclude(**self._db_excludes)
         return queryset.get(**kwargs)
 
     def _get_results(self):
@@ -611,6 +627,10 @@ class SphinxQuerySet(object):
                         queryset = queryset.extra(**self._extra)
                     if self._only:
                         queryset = queryset.only(*self._only_fields)
+                    if self._db_filters:
+                        queryset = queryset.filter(**self._db_filters)
+                    if self._db_excludes:
+                        queryset = queryset.exclude(**self._db_excludes)
                     # django-sphinx supports the compositepks branch
                     # as well as custom id columns in your sphinx configuration
                     # but all primary key columns still need to be present in the field list
