@@ -201,6 +201,9 @@ class SphinxQuerySet(object):
         self._select_related        = False
         self._select_related_args   = {}
         self._select_related_fields = []
+        self._prefetch_related        = False
+        self._prefetch_related_args   = {}
+        self._prefetch_related_fields = []
         self._filters               = {}
         self._excludes              = {}
         self._db_filters           = {}
@@ -401,6 +404,19 @@ class SphinxQuerySet(object):
             _select_related_args=_kwargs,
         )
     
+    # pass these thru on the queryset and let django handle it
+    def prefetch_related(self, *args, **kwargs):
+        _args = self._prefetch_related_fields[:]
+        _args.extend(args)
+        _kwargs = self._prefetch_related_args.copy()
+        _kwargs.update(kwargs)
+        
+        return self._clone(
+            _prefetch_related=True,
+            _prefetch_related_fields=_args,
+            _prefetch_related_args=_kwargs,
+        )
+    
     def extra(self, **kwargs):
         extra = self._extra.copy()
         extra.update(kwargs)
@@ -591,6 +607,8 @@ class SphinxQuerySet(object):
         queryset = self.model._default_manager
         if self._select_related:
             queryset = queryset.select_related(*self._select_related_fields, **self._select_related_args)
+        if self._prefetch_related:
+            queryset = queryset.prefetch_related(*self._prefetch_related_fields, **self._prefetch_related_args)
         if self._extra:
             queryset = queryset.extra(**self._extra)
         if self._only:
@@ -623,6 +641,8 @@ class SphinxQuerySet(object):
                     queryset = self.get_query_set(self.model)
                     if self._select_related:
                         queryset = queryset.select_related(*self._select_related_fields, **self._select_related_args)
+                    if self._prefetch_related:
+                        queryset = queryset.prefetch_related(*self._prefetch_related_fields, **self._prefetch_related_args)
                     if self._extra:
                         queryset = queryset.extra(**self._extra)
                     if self._only:
@@ -861,6 +881,9 @@ class SphinxRelation(SphinxSearch):
             if self._select_related:
                 qs = qs.select_related(*self._select_related_fields,
                                        **self._select_related_args)
+            if self._prefetch_related:
+                qs = qs.prefetch_related(*self._prefetch_related_fields,
+                                       **self._prefetch_related_args)
             if self._extra:
                 qs = qs.extra(**self._extra)
             if self._only:
