@@ -508,23 +508,15 @@ class SphinxQuerySet(object):
                     is_float = isinstance(values[0], float)
                     if lookup in ('gt', 'gte'):
                         value = values[0]
+                        _max = MAX_FLOAT if is_float else MAX_INT
                         if lookup == 'gt':
-                            if is_float:
-                                value += (1.0/MAX_INT)
-                                _max = MAX_FLOAT
-                            else:
-                                value += 1
-                                _max = MAX_INT
+                            value += (1.0/MAX_INT) if is_float else 1
                         args = (name, value, _max, exclude)
                     elif lookup in ('lt', 'lte'):
                         value = values[0]
+                        _max = -MAX_FLOAT if is_float else -MAX_INT
                         if lookup == 'lt':
-                            if is_float:
-                                value -= (1.0/MAX_INT)
-                                _max = -MAX_FLOAT
-                            else:
-                                value -= 1
-                                _max = -MAX_INT
+                            value -= (1.0/MAX_INT) if is_float else 1
                         args = (name, _max, value, exclude)
                     elif lookup == 'in':
                         args = (name, values, exclude)
