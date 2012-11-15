@@ -29,6 +29,7 @@ SPHINX_RETRIES          = int(getattr(settings, 'SPHINX_RETRIES', 0))
 SPHINX_RETRIES_DELAY    = int(getattr(settings, 'SPHINX_RETRIES_DELAY', 5))
 
 MAX_INT = int(2**31-1)
+MAX_FLOAT = 1.1e+38 # this is almost max, that fits in struct.pack 'f'
 
 EMPTY_RESULT_SET = dict(
     matches=[],
@@ -510,22 +511,20 @@ class SphinxQuerySet(object):
                         if lookup == 'gt':
                             if is_float:
                                 value += (1.0/MAX_INT)
+                                _max = MAX_FLOAT
                             else:
                                 value += 1
-                        _max = MAX_INT
-                        if is_float:
-                            _max = float(_max)
+                                _max = MAX_INT
                         args = (name, value, _max, exclude)
                     elif lookup in ('lt', 'lte'):
                         value = values[0]
                         if lookup == 'lt':
                             if is_float:
                                 value -= (1.0/MAX_INT)
+                                _max = -MAX_FLOAT
                             else:
                                 value -= 1
-                        _max = -MAX_INT
-                        if is_float:
-                            _max = float(_max)
+                                _max = -MAX_INT
                         args = (name, _max, value, exclude)
                     elif lookup == 'in':
                         args = (name, values, exclude)
